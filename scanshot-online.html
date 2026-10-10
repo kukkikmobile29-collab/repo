@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>สแกนยิง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;700&family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<style>
+:root{
+  --bg:#F3F1FA;--ink:#17133A;--muted:#5B5780;--panel:#FFFFFF;--line:#D9D4EE;
+  --friend:#0A8F80;--foe:#D92B66;--amber:#B87500;--on-accent:#FFFFFF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#13102B;--ink:#EEF0FF;--muted:#A9A5D0;--panel:#1E1A42;--line:#352F6B;
+    --friend:#2FE0C8;--foe:#FF4F8B;--amber:#FFC24B;--on-accent:#13102B;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13102B;--ink:#EEF0FF;--muted:#A9A5D0;--panel:#1E1A42;--line:#352F6B;
+  --friend:#2FE0C8;--foe:#FF4F8B;--amber:#FFC24B;--on-accent:#13102B;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans Thai","Noto Sans Thai",system-ui,sans-serif;font-size:16px;line-height:1.55;
+  -webkit-tap-highlight-color:transparent;overflow:hidden}
+h1,h2,.display{font-family:Kanit,"Noto Sans Thai",system-ui,sans-serif;font-weight:700;margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--friend);outline-offset:2px}
+
+.screen{position:fixed;inset:0;display:none;flex-direction:column}
+.screen.on{display:flex}
+
+/* ---------- lobby ---------- */
+#sLobby{z-index:30;background:var(--bg);overflow-y:auto;
+  padding:calc(env(safe-area-inset-top,0px) + 24px) 20px calc(env(safe-area-inset-bottom,0px) + 24px)}
+.wrap{width:100%;max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.logo{display:flex;align-items:center;gap:14px}
+.logo svg{flex:none;width:64px;height:64px}
+.logo h1{font-size:44px;line-height:1.05;letter-spacing:.5px}
+.tag{margin:0;color:var(--muted);max-width:34ch}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+label{font-weight:600;font-size:14px;color:var(--muted)}
+input[type=text]{width:100%;font:inherit;font-size:18px;padding:12px 14px;border-radius:12px;
+  border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.btn{border:0;border-radius:14px;padding:14px 16px;font-weight:600;background:var(--friend);color:var(--on-accent);min-height:48px}
+.btn.alt{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn.foe{background:var(--foe);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.note{margin:0;font-size:14px;color:var(--muted)}
+.status{margin:0;font-size:14px;min-height:1.5em}
+.status.err{color:var(--foe)}
+.how{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:15px}
+.how b{font-weight:600}
+
+/* ---------- waiting for friend ---------- */
+#sWait{z-index:20;background:var(--bg);align-items:center;justify-content:center;text-align:center;gap:14px;padding:24px}
+#codeBig{font-family:Kanit,sans-serif;font-weight:700;font-size:64px;letter-spacing:10px;color:var(--friend);line-height:1}
+.pulse{width:10px;height:10px;border-radius:50%;background:var(--friend);animation:pulse 1.2s infinite ease-in-out;display:inline-block;margin-right:8px}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+
+/* ---------- game / camera ---------- */
+#sGame{z-index:10;background:#0b0a1c;color:#fff;overflow:hidden}
+#cam,#syn{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#0b0a1c}
+#syn[hidden],#cam[hidden]{display:none}
+.shade{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(8,6,28,.65),rgba(8,6,28,0) 22%,rgba(8,6,28,0) 62%,rgba(8,6,28,.7))}
+#hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:12px;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;pointer-events:none}
+.who{display:flex;flex-direction:column;gap:5px;max-width:46%;font-weight:600;font-size:14px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.who.foe{align-items:flex-end;text-align:right}
+.who span.n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.pips{display:flex;gap:4px}
+.pips i{width:30px;height:9px;border-radius:3px;background:rgba(255,255,255,.25)}
+.who.me .pips i.on{background:#2FE0C8}
+.who.foe .pips i.on{background:#FF4F8B}
+.tagShield{font-size:12px;font-weight:600;background:#FFC24B;color:#2a1c00;border-radius:6px;padding:1px 8px}
+.tagShield[hidden]{display:none}
+
+#scanFrame{position:absolute;left:20%;top:25%;width:60%;height:45%;pointer-events:none}
+#scanFrame[hidden]{display:none}
+#scanFrame i{position:absolute;width:34px;height:34px;border:4px solid #fff}
+#scanFrame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
+#scanFrame i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+#scanFrame i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 10px}
+#scanFrame i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 10px 0}
+#scanFrame .line{position:absolute;left:6px;right:6px;top:0;height:3px;background:#2FE0C8;
+  box-shadow:0 0 14px 3px #2FE0C8;opacity:0}
+#scanFrame.busy .line{opacity:1;animation:sweep 1s infinite alternate ease-in-out}
+#scanFrame.busy i{border-color:#2FE0C8}
+@keyframes sweep{from{top:2%}to{top:96%}}
+
+#cross{position:absolute;left:50%;top:50%;width:16vw;height:16vw;max-width:90px;max-height:90px;transform:translate(-50%,-50%);pointer-events:none}
+#cross[hidden]{display:none}
+#cross::before,#cross::after{content:"";position:absolute;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.8)}
+#cross::before{left:50%;top:-6px;bottom:-6px;width:2px;transform:translateX(-1px);
+  -webkit-mask:linear-gradient(#000 0 30%,transparent 30% 70%,#000 70%);mask:linear-gradient(#000 0 30%,transparent 30% 70%,#000 70%)}
+#cross::after{top:50%;left:-6px;right:-6px;height:2px;transform:translateY(-1px);
+  -webkit-mask:linear-gradient(90deg,#000 0 30%,transparent 30% 70%,#000 70%);mask:linear-gradient(90deg,#000 0 30%,transparent 30% 70%,#000 70%)}
+#cross span{position:absolute;inset:0;border:2px solid rgba(255,255,255,.75);border-radius:6px}
+#cross.fire span{border-color:#FF4F8B;background:rgba(255,79,139,.2)}
+
+#banner{position:absolute;left:0;right:0;top:36%;text-align:center;font-family:Kanit,sans-serif;font-weight:700;
+  font-size:84px;line-height:1;text-shadow:0 3px 14px rgba(0,0,0,.6);pointer-events:none;opacity:0}
+#banner.show{animation:pop .9s ease-out}
+@keyframes pop{0%{opacity:0;transform:scale(1.5)}15%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+#toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 74px);transform:translateX(-50%);
+  background:rgba(10,8,34,.78);padding:6px 16px;border-radius:999px;font-weight:600;font-size:15px;white-space:nowrap;
+  opacity:0;transition:opacity .2s;pointer-events:none;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1}
+#flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(255,40,90,0) 30%,rgba(255,40,90,.7));opacity:0;pointer-events:none}
+#flash.on{animation:flash .35s ease-out}
+@keyframes flash{0%{opacity:1}100%{opacity:0}}
+.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translate(6px,-3px)}50%{transform:translate(-6px,3px)}75%{transform:translate(3px,2px)}}
+
+#bunkerView{position:absolute;left:0;right:0;bottom:0;height:30%;pointer-events:none;display:none;align-items:flex-end;justify-content:center}
+#bunkerView.setup,#bunkerView.active{display:flex}
+#bunkerView svg{width:min(100%,520px);height:100%;display:block}
+#bunkerView.setup svg{opacity:.45;animation:rise 1.2s ease-out}
+#bunkerView.active svg{opacity:1}
+@keyframes rise{from{transform:translateY(60%)}to{transform:translateY(0)}}
+#bunkerBar{position:absolute;left:20%;right:20%;bottom:calc(env(safe-area-inset-bottom,0px) + 128px);height:5px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
+#bunkerBar b{display:block;height:100%;width:100%;background:#FFC24B;transform-origin:left}
+
+#panel{position:absolute;left:0;right:0;bottom:0;padding:16px 18px calc(env(safe-area-inset-bottom,0px) + 18px);
+  display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;
+  background:linear-gradient(to top,rgba(8,6,28,.92),rgba(8,6,28,.0))}
+#panel[hidden]{display:none}
+#panelMsg{margin:0;font-weight:600;font-size:17px;max-width:32ch;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+#scanBar{width:min(260px,70%);height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
+#scanBar b{display:block;height:100%;width:0;background:#2FE0C8}
+#scanBar[hidden]{display:none}
+#panel .btn{min-width:200px}
+
+#controls{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 22px calc(env(safe-area-inset-bottom,0px) + 22px)}
+#controls[hidden]{display:none}
+#bunkerBtn{width:84px;height:84px;border-radius:24px;border:2px solid #FFC24B;background:rgba(40,28,0,.55);color:#FFC24B;
+  font-weight:700;font-size:14px;line-height:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;backdrop-filter:blur(6px)}
+#bunkerBtn:disabled{opacity:.4}
+#fire,#bunkerBtn,#scanBtn{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+#fire{--cd:360deg;width:104px;height:104px;border-radius:50%;border:0;position:relative;
+  background:conic-gradient(#FF4F8B var(--cd),rgba(255,255,255,.25) 0);display:grid;place-items:center}
+#fire::before{content:"";position:absolute;inset:7px;border-radius:50%;background:#C21E55}
+#fire span{position:relative;font-family:Kanit,sans-serif;font-weight:700;font-size:26px;color:#fff}
+#fire:active::before{background:#8f1240}
+
+#over{position:absolute;inset:0;background:rgba(8,6,28,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+#over[hidden]{display:none}
+#overTitle{font-size:56px;line-height:1.1}
+#overTitle.win{color:#2FE0C8}
+#overTitle.lose{color:#FF4F8B}
+#overSub{margin:0;color:#d7d4f5;max-width:30ch}
+#over .btn{min-width:220px}
+#over .btn.alt{color:#fff;border-color:rgba(255,255,255,.4)}
+
+@media (prefers-reduced-motion: reduce){
+  #scanFrame.busy .line,.pulse,#banner.show,#bunkerView.setup svg{animation:none}
+  #scanFrame.busy .line{top:50%}
+  #banner.show{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== game / camera layer ===== -->
+<section id="sGame" class="screen" aria-label="หน้าจอเกม">
+  <video id="cam" playsinline muted autoplay></video>
+  <canvas id="syn" hidden></canvas>
+  <div class="shade"></div>
+
+  <div id="hud">
+    <div class="who me"><span class="n" id="meName">คุณ</span><span class="pips" id="mePips"></span></div>
+    <div class="who foe"><span class="n" id="foeName">เพื่อน</span><span class="pips" id="foePips"></span><span class="tagShield" id="foeShield" hidden>มีบังเกอร์</span></div>
+  </div>
+
+  <div id="scanFrame" hidden><i></i><i></i><i></i><i></i><b class="line"></b></div>
+  <div id="cross" hidden><span></span></div>
+
+  <div id="bunkerView" aria-hidden="true">
+    <svg viewBox="0 0 400 120" preserveAspectRatio="xMidYMax meet">
+      <g fill="#b99a64" stroke="#5b4624" stroke-width="3">
+        <rect x="10" y="78" width="110" height="36" rx="16"/><rect x="125" y="78" width="110" height="36" rx="16"/>
+        <rect x="240" y="78" width="110" height="36" rx="16"/><rect x="355" y="78" width="40" height="36" rx="16"/>
+        <rect x="55" y="42" width="110" height="36" rx="16"/><rect x="170" y="42" width="110" height="36" rx="16"/>
+        <rect x="285" y="42" width="90" height="36" rx="16"/>
+        <rect x="110" y="6" width="110" height="36" rx="16"/><rect x="225" y="6" width="90" height="36" rx="16"/>
+      </g>
+    </svg>
+  </div>
+  <div id="bunkerBar" hidden><b id="bunkerFill"></b></div>
+
+  <div id="banner" aria-live="assertive"></div>
+  <div id="toast" aria-live="polite"></div>
+  <div id="flash"></div>
+
+  <div id="panel" hidden>
+    <p id="panelMsg"></p>
+    <div id="scanBar" hidden><b id="scanFill"></b></div>
+    <button class="btn" id="scanBtn" type="button">สแกนตัวเพื่อน</button>
+  </div>
+
+  <div id="controls" hidden>
+    <button id="bunkerBtn" type="button"><span>ตั้งบังเกอร์</span><span id="bunkerLeft">×3</span></button>
+    <button id="fire" type="button" aria-label="ยิง"><span>ยิง</span></button>
+  </div>
+
+  <div id="over" hidden>
+    <h2 id="overTitle" class="display"></h2>
+    <p id="overSub"></p>
+    <button class="btn" id="rematchBtn" type="button">เล่นอีกรอบ</button>
+    <button class="btn alt" id="exitBtn" type="button">กลับหน้าแรก</button>
+  </div>
+</section>
+
+<!-- ===== waiting for friend ===== -->
+<section id="sWait" class="screen" aria-label="รอเพื่อน">
+  <h2 style="font-size:30px">รอเพื่อนเข้าห้อง</h2>
+  <div id="codeBig">----</div>
+  <p class="note" style="max-width:30ch">ให้เพื่อนเปิดเกมนี้แล้วกรอกรหัสนี้ในหน้าแรก</p>
+  <p class="note"><span class="pulse"></span><span id="waitMsg">กำลังรอ…</span></p>
+  <button class="btn alt" id="waitExit" type="button" style="min-width:180px">ออกจากห้อง</button>
+</section>
+
+<!-- ===== lobby ===== -->
+<section id="sLobby" class="screen on" aria-label="หน้าแรก">
+  <div class="wrap">
+    <div class="logo">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" style="color:var(--ink)">
+          <path d="M6 20V8a2 2 0 0 1 2-2h12M44 6h12a2 2 0 0 1 2 2v12M58 44v12a2 2 0 0 1-2 2H44M20 58H8a2 2 0 0 1-2-2V44"/>
+        </g>
+        <circle cx="32" cy="32" r="9" fill="var(--foe)"/>
+        <circle cx="32" cy="32" r="3" fill="var(--bg)"/>
+      </svg>
+      <h1>สแกนยิง</h1>
+    </div>
+    <p class="tag">สแกนสีเสื้อของเพื่อนด้วยกล้องหลัง แล้วเล็งยิงผ่านหน้าจอ</p>
+
+    <div class="card">
+      <label for="nick">ชื่อที่ใช้ในเกม</label>
+      <input id="nick" type="text" maxlength="12" autocomplete="off" placeholder="เช่น แมวส้ม">
+      <label for="code">รหัสห้อง (4 หลัก)</label>
+      <input id="code" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="เช่น 4821">
+      <div class="row">
+        <button class="btn" id="joinBtn" type="button" disabled>เข้าห้อง</button>
+        <button class="btn alt" id="makeBtn" type="button" disabled>สร้างห้องใหม่</button>
+      </div>
+      <p class="status" id="status" role="status">กำลังตรวจสอบโหมดออนไลน์…</p>
+    </div>
+
+    <button class="btn foe" id="practiceBtn" type="button">ฝึกยิงคนเดียว</button>
+
+    <ul class="how card">
+      <li><b>สแกน</b> ให้ทั้งสองคนเล็งกล้องไปที่ตัวอีกฝ่าย เกมจะจำสีเสื้อที่เด่นที่สุด</li>
+      <li><b>ยิง</b> เล็งกากบาทกลางจอไปที่ตัวเพื่อน กดยิง ถ้าสีตรงกับที่สแกนไว้ถือว่าโดน 1 ครั้ง ครบ 4 ครั้งจบเกม</li>
+      <li><b>บังเกอร์</b> ตั้งได้ 3 ครั้งต่อรอบ รอ 1 วินาทีกว่าจะพร้อม แล้วรับกระสุนได้ 1 นัดภายใน 7 วินาที ระหว่างตั้งยิงไม่ได้</li>
+    </ul>
+    <p class="note">เล่นในที่โล่ง ระวังสิ่งรอบตัวตอนมองผ่านกล้อง เกมนี้เป็นแค่การจำลอง ภาพจากกล้องไม่ถูกบันทึกหรือส่งออกไปที่ไหน ส่งไปให้เพื่อนเฉพาะชื่อ พลัง และสถานะเท่านั้น</p>
+  </div>
+</section>
+
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+
+/* ---------- tunables ---------- */
+const DAMAGE=25, HIT_SIM=0.55, COOLDOWN=700, BUNKER_SETUP=1200, BUNKER_LIFE=7000, SCAN_MS=2000, MAX_BUNKERS=3;
+
+/* ---------- state ---------- */
+const S={
+  camErr:'',phase:'lobby',mode:null,room:null,api:null,code:'',nick:'',
+  sig:null,src:null,synthetic:false,synOn:false,scanning:false,
+  round:1,landed:0,hp:100,pHp:100,bunkersLeft:MAX_BUNKERS,bunker:'none',bunkerUntil:0,absorbed:0,
+  seen:{round:1,landed:0,abs:0},lastShot:0,ready:false,opp:null,full:false,oppLeft:false
+};
+
+/* ---------- small helpers ---------- */
+const clean=s=>String(s==null?'':s).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g,'').trim().slice(0,12);
+const push=p=>{ if(S.api){ try{ S.api.presence(p).catch(()=>{}); }catch(e){} } };
+const vib=ms=>{ try{ navigator.vibrate&&navigator.vibrate(ms); }catch(e){} };
+let ac=null;
+function sound(t){
+  try{
+    ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+    const cfg={shot:[520,120,.12],hit:[880,440,.15],hurt:[180,70,.25],block:[300,300,.1],scan:[660,990,.2]}[t]; if(!cfg)return;
+    const o=ac.createOscillator(),g=ac.createGain(),now=ac.currentTime;
+    o.type=t==='hurt'?'sawtooth':'square'; o.connect(g); g.connect(ac.destination);
+    o.frequency.setValueAtTime(cfg[0],now); o.frequency.exponentialRampToValueAtTime(Math.max(cfg[1],20),now+cfg[2]);
+    g.gain.setValueAtTime(.07,now); g.gain.exponentialRampToValueAtTime(.001,now+cfg[2]);
+    o.start(now); o.stop(now+cfg[2]+.02);
+  }catch(e){}
+}
+let toastT=0;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1400); }
+function banner(msg){ const b=$('banner'); b.textContent=msg; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); }
+function pips(el,hp){ el.innerHTML=''; const n=Math.ceil(Math.max(0,hp)/DAMAGE); for(let i=0;i<4;i++){ const s=document.createElement('i'); if(i<n)s.className='on'; el.appendChild(s);} }
+function foeHp(){ return S.mode==='practice'?S.pHp:(S.opp&&typeof S.opp.hp==='number'?S.opp.hp:100); }
+function updateHud(){
+  $('meName').textContent=S.nick||'คุณ';
+  $('foeName').textContent=S.mode==='practice'?'เป้าฝึก':clean(S.opp&&S.opp.nick)||'เพื่อน';
+  pips($('mePips'),S.hp); pips($('foePips'),foeHp());
+  $('foeShield').hidden=!(S.mode==='online'&&S.opp&&S.opp.bunker===true);
+}
+function oppNick(){ return S.mode==='practice'?'เป้าฝึก':(clean(S.opp&&S.opp.nick)||'เพื่อน'); }
+function setStatus(msg,err){ const s=$('status'); s.textContent=msg||''; s.className='status'+(err?' err':''); }
+function showPanel(msg,withScan){
+  $('panel').hidden=false; $('panelMsg').textContent=msg;
+  $('scanBtn').hidden=!withScan; $('scanBar').hidden=!withScan; $('scanFill').style.width='0';
+}
+
+/* ---------- camera ---------- */
+async function startCamera(){
+  const v=$('cam');
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw new Error('no-camera-api');
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+    v.srcObject=stream; v.muted=true; v.setAttribute('playsinline','');
+    await v.play();
+    S.src=v; S.synthetic=false; v.hidden=false; $('syn').hidden=true;
+    return true;
+  }catch(e){
+    S.camErr=(e&&e.name)?e.name:String(e);
+    startSynthetic();
+    return false;
+  }
+}
+function startSynthetic(){
+  const c=$('syn'); c.width=320; c.height=240; c.hidden=false; $('cam').hidden=true;
+  S.src=c; S.synthetic=true; S.synOn=true;
+  const g=c.getContext('2d'), t0=performance.now();
+  (function draw(){
+    if(!S.synOn)return;
+    const t=(performance.now()-t0)/1000;
+    g.fillStyle='#8f8fb0'; g.fillRect(0,0,320,240);
+    g.fillStyle='#6f6e96'; g.fillRect(0,170,320,70);
+    const x=160+Math.sin(t*0.7)*110;
+    g.fillStyle='#e2336b'; g.fillRect(x-60,75,120,150);
+    g.fillStyle='#f0c9a8'; g.beginPath(); g.arc(x,55,22,0,7); g.fill();
+    requestAnimationFrame(draw);
+  })();
+}
+function stopCamera(){
+  const v=$('cam');
+  if(v.srcObject){ try{ v.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){} v.srcObject=null; }
+  S.synOn=false; S.src=null;
+}
+
+/* ---------- colour signature ---------- */
+const sc=document.createElement('canvas'); sc.width=24; sc.height=24;
+const sx=sc.getContext('2d',{willReadFrequently:true});
+function dims(){ const s=S.src; return s&&s.tagName==='VIDEO'?{w:s.videoWidth,h:s.videoHeight}:{w:s?s.width:0,h:s?s.height:0}; }
+function histo(d){
+  const H=new Float32Array(15); let n=0;
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i]/255,g=d[i+1]/255,b=d[i+2]/255, mx=Math.max(r,g,b), mn=Math.min(r,g,b), df=mx-mn, s=mx?df/mx:0;
+    if(mx<0.2) H[12]++;
+    else if(s<0.22){ if(mx>0.75)H[14]++; else H[13]++; }
+    else{
+      let h; if(df===0)h=0; else if(mx===r)h=((g-b)/df+6)%6; else if(mx===g)h=(b-r)/df+2; else h=(r-g)/df+4;
+      const p=h*2, i0=Math.floor(p)%12, i1=(i0+1)%12, f=p-Math.floor(p);
+      H[i0]+=1-f; H[i1]+=f;
+    }
+    n++;
+  }
+  for(let k=0;k<15;k++)H[k]/=n;
+  return H;
+}
+const sim=(a,b)=>{ let s=0; for(let k=0;k<15;k++)s+=Math.min(a[k],b[k]); return s; };
+/* fx,fy,fw,fh are fractions of what is visible on screen (the camera is drawn with object-fit: cover) */
+function sample(fx,fy,fw,fh){
+  const {w,h}=dims(); if(!w||!h)return null;
+  const sw=window.innerWidth, sh=window.innerHeight, k=Math.max(sw/w,sh/h), visW=sw/k, visH=sh/k;
+  const ox=(w-visW)/2, oy=(h-visH)/2;
+  try{
+    sx.drawImage(S.src,ox+fx*visW,oy+fy*visH,fw*visW,fh*visH,0,0,24,24);
+    return histo(sx.getImageData(0,0,24,24).data);
+  }catch(e){ return null; }
+}
+
+/* ---------- scan ---------- */
+function doScan(){
+  if(S.scanning||S.phase!=='scan')return;
+  S.scanning=true; $('scanBtn').disabled=true; $('scanFrame').classList.add('busy'); sound('scan');
+  const acc=new Float32Array(15); let n=0; const t0=performance.now();
+  const iv=setInterval(()=>{
+    const p=Math.min(1,(performance.now()-t0)/SCAN_MS);
+    $('scanFill').style.width=(p*100)+'%';
+    const h=sample(.2,.25,.6,.45); if(h){ for(let k=0;k<15;k++)acc[k]+=h[k]; n++; }
+    if(p>=1){ clearInterval(iv); finishScan(acc,n); }
+  },90);
+}
+function finishScan(acc,n){
+  S.scanning=false; $('scanBtn').disabled=false; $('scanFrame').classList.remove('busy'); $('scanFill').style.width='0';
+  if(!n){ showPanel('อ่านภาพจากกล้องไม่ได้ ลองสแกนอีกครั้ง',true); return; }
+  for(let k=0;k<15;k++)acc[k]/=n;
+  if(Math.max(...acc)<0.4){ showPanel('สีบนตัวไม่เด่นพอ เล็งให้เสื้อหรือชุดสีชัดเต็มกรอบ แล้วสแกนใหม่',true); return; }
+  S.sig=acc; sound('hit');
+  $('scanFrame').hidden=true;
+  if(S.mode==='practice'){ startCountdown(); return; }
+  S.ready=true; push({ready:true}); S.phase='wait';
+  showPanel('สแกนเสร็จแล้ว รอ'+oppNick()+'สแกนเสร็จ…',false);
+  tick();
+}
+
+/* ---------- countdown / play ---------- */
+function startCountdown(){
+  S.phase='count'; $('panel').hidden=true; $('scanFrame').hidden=true; resetRound();
+  updateHud();
+  let n=3; banner(String(n));
+  const iv=setInterval(()=>{
+    n--;
+    if(n>0){ banner(String(n)); }
+    else{ clearInterval(iv); banner('ยิง!'); beginPlay(); }
+  },900);
+}
+function resetRound(){
+  S.hp=100; S.pHp=100; S.landed=0; S.bunkersLeft=MAX_BUNKERS; S.bunker='none'; S.absorbed=0;
+  push({hp:100,landed:0,absorbed:0,bunker:false,round:S.round});
+}
+function beginPlay(){
+  if(S.phase!=='count')return;
+  S.phase='play'; S.lastShot=0;
+  $('cross').hidden=false; $('controls').hidden=false; updateHud(); updateBunkerUi();
+  requestAnimationFrame(loop);
+}
+function loop(){
+  if(S.phase!=='play')return;
+  const now=performance.now();
+  if(S.bunker==='setup'&&now>=S.bunkerUntil){
+    S.bunker='active'; S.bunkerUntil=now+BUNKER_LIFE; push({bunker:true}); toast('บังเกอร์พร้อมแล้ว'); sound('block'); updateBunkerUi();
+  }else if(S.bunker==='active'&&now>=S.bunkerUntil){
+    S.bunker='none'; push({bunker:false}); toast('บังเกอร์หมดเวลา'); updateBunkerUi();
+  }
+  $('fire').style.setProperty('--cd',(Math.min(1,(now-S.lastShot)/COOLDOWN)*360)+'deg');
+  if(S.bunker==='setup'){ $('bunkerFill').style.transform='scaleX('+Math.max(0,1-(S.bunkerUntil-now)/BUNKER_SETUP)+')'; }
+  else if(S.bunker==='active'){ $('bunkerFill').style.transform='scaleX('+Math.max(0,(S.bunkerUntil-now)/BUNKER_LIFE)+')'; }
+  requestAnimationFrame(loop);
+}
+function updateBunkerUi(){
+  const v=$('bunkerView'); v.className=S.bunker==='none'?'':S.bunker;
+  $('bunkerBar').hidden=S.bunker==='none';
+  $('bunkerBtn').disabled=S.bunker!=='none'||S.bunkersLeft<=0;
+  $('bunkerLeft').textContent='×'+S.bunkersLeft;
+}
+
+/* ---------- shooting ---------- */
+function fire(){
+  if(S.phase!=='play')return;
+  const now=performance.now();
+  if(now-S.lastShot<COOLDOWN||S.bunker==='setup')return;
+  S.lastShot=now; sound('shot'); vib(20);
+  $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),120);
+  const fw=0.16, fh=fw*window.innerWidth/window.innerHeight;
+  const h=sample(.5-fw/2,.5-fh/2,fw,fh);
+  const score=h&&S.sig?sim(h,S.sig):0;
+  if(score>=HIT_SIM){ toast('ตรงเป้า ('+Math.round(score*100)+'%)'); sound('hit'); registerHit(); }
+  else{ toast('พลาด · สีตรง '+Math.round(score*100)+'%'); }
+}
+function registerHit(){
+  if(S.mode==='practice'){
+    S.pHp=Math.max(0,S.pHp-DAMAGE); updateHud();
+    if(S.pHp<=0) endGame(true,'ยิงเป้าฝึกครบ 4 ครั้ง');
+    return;
+  }
+  S.landed++; push({landed:S.landed});
+}
+function takeHit(){
+  if(S.bunker==='active'){
+    S.bunker='none'; S.absorbed++; push({absorbed:S.absorbed,bunker:false});
+    toast('บังเกอร์รับกระสุนไว้'); sound('block'); updateBunkerUi(); return;
+  }
+  S.hp=Math.max(0,S.hp-DAMAGE); push({hp:S.hp});
+  const f=$('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+  const g=$('sGame'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
+  vib(80); sound('hurt'); updateHud();
+  if(S.hp<=0) endGame(false,'พลังหมดแล้ว');
+}
+function placeBunker(){
+  if(S.phase!=='play'||S.bunker!=='none'||S.bunkersLeft<=0)return;
+  S.bunkersLeft--; S.bunker='setup'; S.bunkerUntil=performance.now()+BUNKER_SETUP;
+  toast('กำลังตั้งบังเกอร์ ยิงไม่ได้ชั่วคราว'); updateBunkerUi();
+}
+
+/* ---------- end / rematch ---------- */
+function endGame(win,reason,left){
+  if(S.phase==='over')return;
+  S.phase='over'; S.ready=false; S.oppLeft=!!left; push({ready:false});
+  $('cross').hidden=true; $('controls').hidden=true; $('bunkerView').className=''; $('bunkerBar').hidden=true;
+  $('overTitle').textContent=win?'คุณชนะ':'คุณแพ้';
+  $('overTitle').className='display '+(win?'win':'lose');
+  $('overSub').textContent=reason||'';
+  $('rematchBtn').hidden=!!left;
+  $('over').hidden=false; sound(win?'hit':'hurt');
+}
+function rematch(){
+  $('over').hidden=true; S.round++;
+  if(S.mode==='practice'){ startCountdown(); return; }
+  S.hp=100; S.landed=0; S.absorbed=0; S.bunkersLeft=MAX_BUNKERS; S.bunker='none';
+  S.ready=true; S.phase='wait';
+  push({round:S.round,hp:100,landed:0,absorbed:0,bunker:false,ready:true});
+  showPanel('รอ'+oppNick()+'กดเล่นอีกรอบ…',false);
+  updateHud(); tick();
+}
+
+/* ---------- online room ---------- */
+function players(){
+  return S.api.peers().filter(p=>p.kind==='viewer').slice().sort((a,b)=>a.peer<b.peer?-1:a.peer>b.peer?1:0).slice(0,2);
+}
+function tick(){
+  if(S.mode!=='online'||!S.api)return;
+  const ps=players(), meP=ps.find(p=>p.sameTab), oppP=ps.find(p=>!p.isMe);
+  S.full=ps.length>=2&&!meP;
+  const opp=oppP?oppP.presence:null; S.opp=opp;
+  const known=!!(opp&&opp.nick);
+
+  if(S.phase==='friend'){
+    if(S.full){ $('waitMsg').textContent='ห้องนี้เต็มแล้ว (มีผู้เล่นครบ 2 คน)'; return; }
+    if(known){
+      S.phase='scan'; $('sWait').classList.remove('on'); $('scanFrame').hidden=false; updateHud();
+      showPanel('เล็งกล้องไปที่ตัว'+oppNick()+'ให้เต็มกรอบ แล้วกดสแกน'+(S.synthetic?' (โหมดจำลอง: ใช้กล้องไม่ได้ · '+S.camErr+')':''),true);
+    }else{ $('waitMsg').textContent='กำลังรอเพื่อนเข้าห้อง…'; }
+    return;
+  }
+  if(S.phase==='scan'){
+    if(!known){ backToWaiting(); return; }
+    updateHud(); return;
+  }
+  if(S.phase==='wait'){
+    if(!known){ backToWaiting(); return; }
+    updateHud();
+    if(S.ready&&opp.ready===true&&(typeof opp.hp!=='number'||opp.hp>0)) startCountdown();
+    return;
+  }
+  if(S.phase==='count'){
+    if(!known) endGame(true,'เพื่อนออกจากห้อง',true);
+    return;
+  }
+  if(S.phase==='play'){
+    if(!known){ endGame(true,'เพื่อนออกจากห้อง',true); return; }
+    if(opp.round!==S.seen.round){ S.seen={round:opp.round,landed:0,abs:0}; }
+    const L=opp.landed|0;
+    while(S.seen.landed<L && S.phase==='play'){ S.seen.landed++; takeHit(); }
+    if((opp.absorbed|0)>S.seen.abs){ S.seen.abs=opp.absorbed|0; toast('บังเกอร์ของเพื่อนรับไว้'); }
+    updateHud();
+    if(S.phase==='play'&&typeof opp.hp==='number'&&opp.hp<=0) endGame(true,'ยิงโดนจนเพื่อนหมดพลัง');
+  }
+}
+function backToWaiting(){
+  S.phase='friend'; S.ready=false; S.sig=null; push({ready:false});
+  $('panel').hidden=true; $('scanFrame').hidden=true; $('sWait').classList.add('on');
+  $('waitMsg').textContent='เพื่อนหลุดจากห้อง กำลังรอใหม่…';
+}
+
+async function goOnline(code){
+  if(!S.room){ setStatus('โหลดระบบออนไลน์ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วเปิดหน้านี้ใหม่',true); return; }
+  S.nick=clean($('nick').value)||'ผู้เล่น'; try{ localStorage.setItem('scanshot-nick',S.nick); }catch(e){}
+  setStatus('กำลังขอใช้กล้อง…');
+  $('joinBtn').disabled=true; $('makeBtn').disabled=true; $('practiceBtn').disabled=true;
+  const ok=await startCamera();
+  setStatus('กำลังเข้าห้อง…');
+  let api;
+  try{ api=await S.room.join('ss-'+code); }
+  catch(e){ stopCamera(); lockButtons(false); setStatus('เข้าห้องไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง',true); return; }
+  S.api=api; S.mode='online'; S.code=code; S.phase='friend'; S.round=1; S.ready=false; S.sig=null; S.opp=null;
+  S.seen={round:1,landed:0,abs:0}; S.hp=100; S.landed=0; S.absorbed=0; S.bunkersLeft=MAX_BUNKERS; S.bunker='none';
+  api.presence({nick:S.nick,hp:100,landed:0,round:1,absorbed:0,bunker:false,ready:false}).catch(()=>{});
+  api.onPeers(()=>tick(),()=>{ if(S.phase!=='lobby'){ $('waitMsg').textContent='การเชื่อมต่อห้องหลุด'; } });
+  $('codeBig').textContent=code;
+  $('waitMsg').textContent=ok?'กำลังรอเพื่อนเข้าห้อง…':'กำลังรอเพื่อนเข้าห้อง (กล้องใช้ไม่ได้ จะเข้าโหมดจำลอง)';
+  $('sLobby').classList.remove('on'); $('sGame').classList.add('on'); $('sWait').classList.add('on');
+  updateHud(); setStatus('');
+  tick();
+}
+async function goPractice(){
+  S.nick=clean($('nick').value)||'ผู้เล่น'; try{ localStorage.setItem('scanshot-nick',S.nick); }catch(e){}
+  setStatus('กำลังขอใช้กล้อง…'); lockButtons(true);
+  const ok=await startCamera();
+  S.mode='practice'; S.api=null; S.phase='scan'; S.round=1; S.sig=null; S.opp=null;
+  S.hp=100; S.pHp=100; S.bunkersLeft=MAX_BUNKERS; S.bunker='none';
+  $('sLobby').classList.remove('on'); $('sGame').classList.add('on'); $('sWait').classList.remove('on');
+  $('scanFrame').hidden=false; updateHud(); setStatus('');
+  showPanel('เล็งไปที่วัตถุหรือเสื้อสีชัดๆ ให้เต็มกรอบ แล้วกดสแกน เพื่อใช้เป็นเป้าฝึก'+(ok?'':' (โหมดจำลอง: ใช้กล้องไม่ได้ · '+S.camErr+')'),true);
+}
+function lockButtons(lock){
+  const online=!!S.room;
+  $('joinBtn').disabled=lock||!online; $('makeBtn').disabled=lock||!online; $('practiceBtn').disabled=lock;
+}
+function exitToLobby(){
+  try{ if(S.api) S.api.leave().catch(()=>{}); }catch(e){}
+  stopCamera();
+  S.api=null; S.mode=null; S.phase='lobby'; S.sig=null; S.ready=false; S.opp=null; S.scanning=false;
+  ['sGame','sWait'].forEach(i=>$(i).classList.remove('on')); $('sLobby').classList.add('on');
+  $('over').hidden=true; $('panel').hidden=true; $('scanFrame').hidden=true; $('cross').hidden=true; $('controls').hidden=true;
+  $('bunkerView').className=''; $('bunkerBar').hidden=true;
+  $('cam').hidden=false; $('syn').hidden=true;
+  lockButtons(false); setStatus('');
+}
+
+
+/* ---------- real online: WebRTC peer-to-peer via PeerJS (1 vs 1) ---------- */
+function makePeerRoom(){
+  return {join:code=>new Promise((resolve,reject)=>{
+    const base='scanshot-'+code;
+    let peer=null,conn=null,tag='a-host',oppTag='b-guest',mine={},theirs=null,subs=[],done=false;
+    const notify=()=>subs.forEach(f=>{ try{ f({}); }catch(e){} });
+    const api={
+      presence(p){ Object.assign(mine,p); if(conn&&conn.open){ try{ conn.send({t:'p',d:p}); }catch(e){} } notify(); return Promise.resolve(); },
+      peers(){
+        const a=[{peer:tag,kind:'viewer',isMe:true,sameTab:true,presence:mine}];
+        if(conn&&conn.open&&theirs)a.push({peer:oppTag,kind:'viewer',isMe:false,sameTab:false,presence:theirs});
+        return a;
+      },
+      onPeers(f){ subs.push(f); return ()=>{ subs=subs.filter(x=>x!==f); }; },
+      leave(){ try{ if(peer)peer.destroy(); }catch(e){} return Promise.resolve(); }
+    };
+    const finish=()=>{ if(!done){ done=true; resolve(api); } };
+    const wire=c=>{
+      conn=c;
+      const hello=()=>{ try{ c.send({t:'p',d:mine}); }catch(e){} notify(); };
+      c.on('open',hello);
+      c.on('data',m=>{ if(m&&m.t==='p'&&m.d&&typeof m.d==='object'){ theirs=Object.assign(theirs||{},m.d); notify(); } });
+      c.on('close',()=>{ if(conn===c){ conn=null; theirs=null; notify(); } });
+      if(c.open)hello();
+    };
+    const start=asHost=>{
+      peer=asHost?new Peer(base):new Peer();
+      peer.on('open',()=>{
+        if(asHost){ tag='a-host'; oppTag='b-guest'; finish(); }
+        else{ tag='b-guest'; oppTag='a-host'; wire(peer.connect(base,{reliable:true})); finish(); }
+      });
+      peer.on('connection',c=>{
+        if(conn&&conn.open){ c.on('open',()=>{ try{ c.close(); }catch(e){} }); return; }
+        wire(c);
+      });
+      peer.on('error',err=>{
+        if(asHost&&err&&err.type==='unavailable-id'){ try{ peer.destroy(); }catch(e){} start(false); }
+        else if(!done){ done=true; reject(err); }
+      });
+    };
+    setTimeout(()=>{ if(!done){ done=true; reject(new Error('timeout')); } },12000);
+    start(true);
+  })};
+}
+
+/* ---------- wiring ---------- */
+$('scanBtn').addEventListener('click',doScan);
+$('fire').addEventListener('pointerdown',e=>{ e.preventDefault(); fire(); });
+$('bunkerBtn').addEventListener('click',placeBunker);
+$('rematchBtn').addEventListener('click',rematch);
+$('exitBtn').addEventListener('click',exitToLobby);
+$('waitExit').addEventListener('click',exitToLobby);
+$('practiceBtn').addEventListener('click',goPractice);
+$('joinBtn').addEventListener('click',()=>{
+  const c=$('code').value.replace(/\D/g,'').slice(0,4);
+  if(c.length!==4){ setStatus('กรอกรหัสห้องให้ครบ 4 หลัก',true); return; }
+  goOnline(c);
+});
+$('makeBtn').addEventListener('click',()=>{
+  const c=String(1000+Math.floor(Math.random()*9000)); $('code').value=c; goOnline(c);
+});
+$('code').addEventListener('input',e=>{ e.target.value=e.target.value.replace(/\D/g,'').slice(0,4); });
+document.addEventListener('contextmenu',e=>{ if(S.phase!=='lobby')e.preventDefault(); });
+
+try{ const n=localStorage.getItem('scanshot-nick'); if(n)$('nick').value=clean(n); }catch(e){}
+
+(async()=>{
+  S.room=window.Peer?makePeerRoom():null;
+  lockButtons(false);
+  setStatus(S.room?'โหมดออนไลน์พร้อมใช้งาน':'โหลดระบบออนไลน์ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วเปิดหน้านี้ใหม่ ฝึกยิงคนเดียวได้ตามปกติ',!S.room);
+})();
+})();
+</script>
+</body>
+</html>
